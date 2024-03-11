@@ -21,7 +21,7 @@
                 fprintf(stderr, RED "В файле: %s \n" RED , __FILE__);          \
                 fprintf(stderr, RED "В функции: %s \n" RED, __func__);         \
                 fprintf(stderr, RED "В строке: %d \n" BLACK , __LINE__);       \
-                exit(0);                                                       \
+                exit(1);                                                       \
             }                                                                  \
     }                                                                          \
     while (0);

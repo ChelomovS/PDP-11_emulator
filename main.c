@@ -5,7 +5,7 @@
 
 int main(const int argc, const char** argv)
 {
-    test_all();
+    test_memory();
 
     return 0;
 }

@@ -11,6 +11,6 @@
 void test1();
 void test2();
 
-void test_all();
+void test_memory();
 
 #endif // TEST_H

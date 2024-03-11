@@ -24,8 +24,9 @@ void word_write(address adr, word_t value)
     ASSERT(adr > 0);
     ASSERT(adr <= MEMORY_SIZE);
     ASSERT(adr % 2 == 0);
-    byte_t b0 = (byte_t)value;
-    byte_t b1 = (byte_t)(value << 8);
+
+    byte_t b0 = (byte_t)(value ^ 0x1100);
+    byte_t b1 = (byte_t)((value ^ 0x0011) >> 2);
 
     memory[adr] = b0;
     memory[adr + 1] = b1;
