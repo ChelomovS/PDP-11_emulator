@@ -78,7 +78,6 @@ void test4() // Записать слово, прочитать два байт�
 
     ASSERT(first_byte_exp == first_byte_res);
     ASSERT(second_byte_exp == second_byte_res);
-
 }
 
 void test_memory()
