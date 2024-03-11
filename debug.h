@@ -30,7 +30,6 @@
 #define DEBUG_PRINT(...) ;
 #endif
 
-
 #define $ fprintf(stderr, RED ">>> %s (%d) %s\n" WHITE,                        \
                   __FILE__, __LINE__, __PRETTY_FUNCTION__);
 #define PRINT_NUM(num)     fprintf(stderr, "[%d] %s %lld\n", __LINE__, #num, num);

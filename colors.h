@@ -10,4 +10,6 @@
 #define BLUE     "\033[36m"
 #define WHITE    "\033[37m"
 
+#define RESET    "\x1b[0m"
+
 #endif // COLORS_H
