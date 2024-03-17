@@ -43,3 +43,25 @@ void memory_dump(address adr, size_t dump_size)
         printf(GREEN "%06o: %06o %04x \n" RESET, adr + adr_move, memory[adr + adr_move], memory[adr + adr_move]);
     }
 }
+
+void load_data(const char* file_name)
+{
+    ASSERT(file_name != NULL);
+
+    FILE* filein = fopen(file_name, "r");
+    ASSERT(filein != NULL);
+
+    address adr = 0;
+    fscanf(filein, "%hd", &adr);
+
+    uint32_t number_of_bytes = 0;
+    fscanf(filein, "%x", &number_of_bytes);
+    byte_t byte = 0;
+
+    for (size_t pass = 0; pass < number_of_bytes; pass++)
+    {
+        fscanf(filein, "%hhx", &byte);
+        byte_write(adr, byte);
+        adr++;
+    }
+}

@@ -5,8 +5,8 @@
 
 int main(const int argc, const char** argv)
 {
-    test_memory();
-    
+    load_data(argv[1]);
+
     memory_dump(0, 100);
     return 0;
 }
