@@ -36,10 +36,10 @@ word_t word_read(address adr)
 }
 
 
-void memory_dump(address adr, int dump_size)
+void memory_dump(address adr, size_t dump_size)
 {
-    for (size_t adr_move = 0; adr_move < dump_size; adr_move += 2)
+    for (size_t adr_move = 0; adr_move < dump_size; adr_move ++)
     {
-        printf(GREEN "%06o: %06o %04x " RESET);
+        printf(GREEN "%06o: %06o %04x \n" RESET, adr + adr_move, memory[adr + adr_move], memory[adr + adr_move]);
     }
 }
