@@ -1,25 +1,37 @@
 #include <stdio.h>
 
+#include "errors.h"
 #include "mem.h"
 #include "debug.h"
-#include "errno.h"
 
 byte_t memory[MEMORY_SIZE];
 
+word_t reg[NUMBER_OF_REG]; // регистры R0 ... R7
+
 void byte_write(address adr, byte_t value)
 {
+    ASSERT((int)adr <= MEMORY_SIZE);
     memory[adr] = value;
 }
 
 byte_t byte_read(address adr)
 {
+    ASSERT((int)adr <= MEMORY_SIZE)
     return memory[adr];
 }
 
 void word_write(address adr, word_t value)
 {
-    ASSERT(adr % 2 == 0);
+    ASSERT((int)adr < MEMORY_SIZE);
+    
+    if (adr < 8)
+    {
+        fprintf(stderr, "Пишу в регистр\n");
+        reg[adr] = value;
+        return;
+    }
 
+    ASSERT(adr % 2 == 0);
     byte_t b0 = (byte_t)(value & 0x00FF);
     byte_t b1 = (byte_t)((value & 0xFF00) >> 8);
 
@@ -29,13 +41,17 @@ void word_write(address adr, word_t value)
 
 word_t word_read(address adr)
 {
-    ASSERT(adr % 2 == 0)
-
-    word_t word = ((word_t)(memory[adr+1])) << 8;
+    ASSERT((int)adr < MEMORY_SIZE);
+    if (adr < 8)
+    {
+        fprintf(stderr, "Читаю из регистра\n");
+        return reg[adr];
+    }
+    ASSERT((int)adr % 2 == 0)
+    word_t word = (word_t)(((word_t)(memory[adr+1])) << 8);
     word = word | memory[adr];
     return word;
 }
-
 
 void memory_dump(address adr, size_t dump_size)
 {
@@ -48,23 +64,21 @@ void memory_dump(address adr, size_t dump_size)
     }
 }
 
-int load_data(const char* file_name)
+enum pdp_errors load_data(const int argc, const char* file_name)
 {
+    if (file_name == NULL || argc < 2)
+        return pdp_no_such_file;
+
     FILE* filein = fopen(file_name, "r");
     if (filein == NULL)
+        return pdp_bad_file_for_open;
+    address adr;
+    while (fscanf(filein, "%hx", &adr) != EOF)
     {
-        printf("errno: %d \n", errno);
-        perror(file_name);
-        return 1;
-    }
+        word_t number_of_bytes = 0;
+        fscanf(filein, "%hx", &number_of_bytes);
 
-    address adr = 0;
-    while (fscanf(filein, "%hd", &adr) != EOF)
-    {
-        uint32_t number_of_bytes = 0;
-        fscanf(filein, "%x", &number_of_bytes);
         byte_t byte = 0;
-
         for (size_t pass = 0; pass < number_of_bytes; pass++)
         {
             fscanf(filein, "%hhx", &byte);
@@ -73,5 +87,5 @@ int load_data(const char* file_name)
         }
     }
     
-    return 0;
+    return pdp_ok;
 }
