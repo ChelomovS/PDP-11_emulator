@@ -1,12 +1,15 @@
 #include <stdlib.h>
 #include "commands.h"
-#include "mem.h"
 #include "test_memory.h"
+#include "errors.h"
 
 Arg dd = {};
 Arg ss = {};
 
-word_t reg[NUMBER_OF_REG];
+
+byte_t memory[MEMORY_SIZE] = {};
+
+word_t reg[NUMBER_OF_REG] = {}; // регистры R0 ... R7
 
 static const Command cmd[] = 
 { // MASK     OPCODE   NAME       COMMAND     PARAMS
@@ -43,13 +46,14 @@ Command parse_cmd(word_t word)
             if (cmd[pass].params == HAS_SS)
             {
                 ss = get_mr(word >> 6); 
-                dd = get_mr(word);                                  
+                dd = get_mr(word);                               
             }
             else 
             if (cmd[pass].params == HAS_DD)
             {
                 dd = get_mr(word);
             }
+
             parsed_command = cmd[pass];
             break; 
         }
@@ -59,9 +63,9 @@ Command parse_cmd(word_t word)
 
 void do_mov()
 {
-    fprintf(stderr, "mov \n");
     // значение аргумента ss пишем по адресу аргумента dd
     word_write(dd.adr, ss.value);
+    fprintf(stderr, "mov \n");
 }
 
 void do_add()
@@ -74,25 +78,24 @@ void do_add()
 
 void do_sob()
 {
-    fprintf(stderr, "sob \n");
+    fprintf(stdout, "sob \n");
 }
 
 void do_inc()
 {
-    fprintf(stderr, "inc \n");
+    fprintf(stdout, "inc \n");
 }
 
 void do_halt()
-{
-    memory_dump(0, 2000);
+{    
+    fprintf(stdout, "halt \n");
     reg_dump();
-    fprintf(stderr, "halt \n");
     exit(0);
 }
 
 void do_nothing()
 {
-    fprintf(stderr, "unknown \n");
+    fprintf(stdout, "unknown \n");
 }
 
 Arg get_mr(word_t word)
@@ -100,39 +103,40 @@ Arg get_mr(word_t word)
     Arg res = {};
 
     word_t reg_number = word & 7;      // номер регистра, 7 - бинарная маска 111
-    fprintf(stderr, "%d", reg_number);
+
     word_t mod = (word >> 3) & 7;      // определение моды
     switch (mod)
     {
         // мода 0, R1
         case 0:
-            res.adr = (address)reg_number; // адрес - номер регистра
-            res.value = reg[res.adr];   // значение - число в регистре
-            printf("R%d \n", res.adr);  // печать номера регистра
+            res.adr = (address)reg_number;        // адрес - номер регистра
+            res.value = reg[reg_number];          // значение - число в регистре
+            fprintf(stderr, "R%d ", reg_number);  // печать номера регистра
             break;
 
         // мода 1, (R1)
         case 1:
-            res.adr = (address)reg[reg_number];  // в регистре адрес
-            res.value = word_read(res.adr);      // по адресу - значение
-            printf("(R%d) \n", reg_number);      // печать обращения к регистру по адресу 
+            res.adr = reg[reg_number];               // в регистре адрес
+            res.value = word_read(res.adr);          // по адресу - значение
+            fprintf(stderr,"(R%d) ", reg_number);    // печать обращения к регистру по адресу 
             break;
 
         // мода 2, (R1)+ или #3
         case 2:
-            res.adr = (address)reg[reg_number];  // в регистре адрес
-            res.value = word_read(res.adr);      // по адресу - значение
-            reg[reg_number] += 2;            
+            reg[reg_number] += 2;        
+            res.adr = reg[reg_number];       // в регистре адрес
+            res.value = word_read(res.adr);  // по адресу - значение
+
             // печать разной мнемоники для PC и других регистров
             if (reg_number == 7)
-                printf("#%o \n", res.value);
+                fprintf(stderr, "#%ho ", word_read(reg[reg_number]));
             else
-                printf("(R%d) \n", reg_number);
+                fprintf(stderr, "(R%d) ", reg_number);
             break;
         // мода 3
         case 3:
-            res.adr = word_read(reg[reg_number]);
-            res.value = word_read(res.adr);   // добавилось еще одно разыменование
+            res.adr = reg[reg_number];
+            res.value = word_read(res.adr);      // добавилось еще одно разыменование
             reg[reg_number] += 2;
             break;
 
@@ -157,6 +161,7 @@ Arg get_mr(word_t word)
             fprintf(stderr, "Mode %d not implemented yet!\n", mod);
             exit(1);
     }
+
     return res;
 }
 
@@ -164,7 +169,7 @@ void reg_dump()
 {
     for (size_t reg_number = 0; reg_number < NUMBER_OF_REG; reg_number++)
     {
-        printf("reg[%zu] = %.6o \n", reg_number, reg[reg_number]);
+        printf("reg[%zu] = %.6ho \n", reg_number, reg[reg_number]);
     }
 }
 
@@ -251,4 +256,85 @@ void test_mov()
     printf("Test mov - OK\n");
     reg[3] = 0;
     reg[5] = 0;
+}
+
+
+void byte_write(address adr, byte_t value)
+{
+    ASSERT((int)adr <= MEMORY_SIZE);
+    memory[adr] = value;
+}
+
+byte_t byte_read(address adr)
+{
+    ASSERT((int)adr <= MEMORY_SIZE)
+    return memory[adr];
+}
+
+void word_write(address adr, word_t value)
+{
+    ASSERT((int)adr < MEMORY_SIZE);
+
+    if (adr < 8)
+    {
+        reg[adr] = value;
+        return;
+    }
+
+    ASSERT(adr % 2 == 0);
+    byte_t b0 = (byte_t)((value));
+    byte_t b1 = (byte_t)((value) >> 8);
+
+    memory[adr] = b0;
+    memory[adr + 1] = b1;
+}
+
+word_t word_read(address adr)
+{
+    ASSERT((int)adr < MEMORY_SIZE);
+    if (adr < 8)
+    {
+        return reg[adr];
+    }
+    ASSERT((int)adr % 2 == 0)
+    word_t word = (word_t)(((word_t)(memory[adr+1])) << 8);
+    word = word | memory[adr];
+    return word;
+}
+
+void memory_dump(address adr, size_t dump_size)
+{
+    ASSERT(adr % 2 == 0);
+
+    FILE* file_dump = fopen("dump.txt", "w");
+    for (size_t adr_move = 0; adr_move < dump_size; adr_move += 2)
+    {
+        fprintf(file_dump, "%06ho: %06ho %04hx \n", adr + adr_move, word_read(adr + adr_move), word_read(adr + adr_move));
+    }
+}
+
+enum pdp_errors load_data(const int argc, const char* file_name)
+{
+    if (file_name == NULL || argc < 2)
+        return pdp_no_such_file;
+
+    FILE* filein = fopen(file_name, "r");
+    if (filein == NULL)
+        return pdp_bad_file_for_open;
+    address adr;
+    while (fscanf(filein, "%hx", &adr) != EOF)
+    {
+        word_t number_of_bytes = 0;
+        fscanf(filein, "%hx", &number_of_bytes);
+
+        byte_t byte = 0;
+        for (size_t pass = 0; pass < number_of_bytes; pass++)
+        {
+            fscanf(filein, "%hhx", &byte);
+            byte_write(adr, byte);
+            adr++;
+        }
+    }
+    
+    return pdp_ok;
 }

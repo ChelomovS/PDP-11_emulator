@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #include "debug.h"
-#include "mem.h"
+
 #include "commands.h"
 
 // const size_t TEST_NUMBER = 4;
