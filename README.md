@@ -13,9 +13,7 @@
     write <code>cd PDP-11_emulator</code> in terminal
 
 3. Build & run <br>
-    write <code>make</code> in terminal
-    create <code>datafile<code> with data
-    write <code>./pdp data.file 2>stderr<code>
+    write <code>make</code> in terminal, create <code>datafile<code> with data, write <code>./pdp data.file 2>stderr<code>
    
 <p align="center"><img src="https://github.com/ChelomovS/PDP-11_emulator/blob/main/Images/agressive.gif" width="30%"></p>
 <p align="center"><img src="https://github.com/ChelomovS/PDP-11_emulator/blob/main/Images/smart.gif" width="30%"></p>
