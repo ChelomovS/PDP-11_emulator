@@ -1,8 +1,7 @@
 #include <stdio.h>
 
-#include "mem.h"
 #include "commands.h"
-#include "test_memory.h"
+#include "test.h"
 #include "errors.h"
 
 int main(const int argc, const char** argv)
@@ -19,9 +18,12 @@ int main(const int argc, const char** argv)
         errors_processing(error);
         return 1;
     }
-    run();
-
-    memory_dump(0, 2000);
-    run();
+    word_write(ostat, 0xFFFF);
+    error = run();
+    if (error != pdp_ok)
+    {
+        errors_processing(error);
+        return 1;
+    }
     return 0;
 }
