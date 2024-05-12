@@ -1,5 +1,5 @@
-#ifndef TEST_MEMORY_H
-#define TEST_MEMORY_H
+#ifndef TEST_H
+#define TEST_H
 
 #include <stdio.h>
 
@@ -17,4 +17,4 @@ void test_mode1_toreg();
 void test_mode0();
 void test_mov();
 
-#endif // TEST_MEMORY_H
+#endif // TEST_H
