@@ -1,11 +1,24 @@
-#include <stdlib.h>
 #include "commands.h"
-#include "test_memory.h"
+
+#include <stdlib.h>
+#include <stdbool.h>
+
+#include "test.h"
 #include "errors.h"
 
 Arg dd = {};
 Arg ss = {};
+Arg nn = {};
 
+Arg r  = {};
+Arg b  = {};
+
+char xx = 0;
+
+short flag_N = 0;
+short flag_Z = 0;
+short flag_V = 0;
+short flag_C = 0;
 
 byte_t memory[MEMORY_SIZE] = {};
 
@@ -13,15 +26,21 @@ word_t reg[NUMBER_OF_REG] = {}; // регистры R0 ... R7
 
 static const Command cmd[] = 
 { // MASK     OPCODE   NAME       COMMAND     PARAMS
-    {0170000, 0010000, "mov",     do_mov,     HAS_SS},
-    {0170000, 0060000, "add",     do_add,     HAS_SS},
-    {0177000, 0077000, "sob",     do_sob,     },
-    {0177700, 0005200, "inc",     do_inc,     HAS_DD},
-    {0177777, 0000000, "halt",    do_halt,    },
-    {0000000, 0000000, "unknown", do_nothing, }
+    {0070000, 0010000, "mov",     do_mov,     HAS_SS | HAS_DD | HAS_B},
+    {0170000, 0060000, "add",     do_add,     HAS_SS | HAS_DD},
+    {0177000, 0077000, "sob",     do_sob,     HAS_NN | HAS_R},
+    {0177000, 0004000, "jsr",     do_jsr,     HAS_R | HAS_DD},
+    {0177770, 0000200, "rts",     do_rts,     HAS_RL},
+    {0177700, 0005000, "clr",     do_clr,     HAS_DD},
+    {0177700, 0001400, "beq",     do_beq,     HAS_XX},
+    {0177000, 0100000, "bpl",     do_bpl,     HAS_XX},
+    {0017700, 0005700, "tst",     do_tst,     HAS_DD | HAS_B},
+    {0177777, 0000000, "halt",    do_halt,    NO_PARAMS},
+    {0177400, 0000400, "br",      do_br,      HAS_XX},
+    {0000000, 0000000, "unknown", do_nothing, NO_PARAMS}
 };
 
-void run()
+enum pdp_errors run()
 {
     pc = 01000;
     word_t word = 0;
@@ -29,10 +48,16 @@ void run()
     while(1)
     {
         word = word_read(pc);
+  
+        if (pc < 0)
+            return programm_counter_negative;
+
         fprintf(stderr, "%06o %06o: ", pc, word);
+        pc += 2;           
         Command command = parse_cmd(word);
-        pc += 2;
+  
         command.do_command();
+        fprintf(stderr, "\n");
     }
 }
 
@@ -43,17 +68,31 @@ Command parse_cmd(word_t word)
     {
         if ((word & cmd[pass].mask) == cmd[pass].opcode)
         {
-            if (cmd[pass].params == HAS_SS)
+            fprintf(stderr,"%s ", cmd[pass].name);
+            if ((cmd[pass].params & HAS_B) == HAS_B)
             {
-                ss = get_mr(word >> 6); 
-                dd = get_mr(word);                               
+                b = get_b(word >> 15);
             }
-            else 
-            if (cmd[pass].params == HAS_DD)
+            if ((cmd[pass].params & HAS_NN) == HAS_NN)
             {
+                nn = get_nn(word);
+            }
+            if ((cmd[pass].params & HAS_R) == HAS_R)
+            {
+                r = get_r(word >> 6);
+            }
+            if ((cmd[pass].params & HAS_SS) == HAS_SS)
+            {
+                ss = get_mr(word >> 6);                       
+            }
+            if ((cmd[pass].params & HAS_DD) == HAS_DD)
+            {               
                 dd = get_mr(word);
             }
-
+            if ((cmd[pass].params & HAS_XX) == HAS_XX)
+            {
+                xx = (char)get_xx(word);
+            }
             parsed_command = cmd[pass];
             break; 
         }
@@ -62,40 +101,121 @@ Command parse_cmd(word_t word)
 }
 
 void do_mov()
-{
-    // значение аргумента ss пишем по адресу аргумента dd
-    word_write(dd.adr, ss.value);
-    fprintf(stderr, "mov \n");
+{    
+    if (b.value == 0)
+    {
+        // значение аргумента ss пишем по адресу аргумента dd
+        word_write(dd.adr, ss.value);
+    }
+    else if (b.value == 1)
+    {
+        byte_write(dd.adr, (byte_t)ss.value);
+    }
+
+    if (dd.adr == odata)
+    {
+        printf("%c", ss.value);
+    }
+
+    set_NZVC(ss.value);
+    flag_V = 0;
 }
 
 void do_add()
 {
-    fprintf(stderr, "add \n");
     // сумму значений аргументов ss и dd пишем по адресу аргумента dd
     word_write(dd.adr, ss.value + dd.value);
+    set_NZVC(ss.value + dd.value);
 }
 
+void do_clr()
+{
+    word_write(dd.adr, 0);
+}
+
+void do_br()
+{
+    pc = (adress)(pc + 2 * xx);
+    fprintf(stderr, "br %ho", pc);
+}
+
+void do_beq()
+{
+    if (flag_Z == 1)
+        pc = (adress)(pc + 2 * xx);
+    fprintf(stderr, "%ho", pc);
+}
+
+void do_bpl()
+{
+    if (flag_N == 0)
+        pc = (adress)(pc + 2 * xx);
+    fprintf(stderr, "%ho", pc);
+}
+
+void do_tst()
+{
+    set_NZVC(dd.value);
+    flag_V = 0;
+    flag_C = 0;
+}
 
 void do_sob()
 {
-    fprintf(stdout, "sob \n");
+    reg[r.value]--; 
+    if (reg[r.value] > 0)
+        pc = pc - 2 * nn.value;
+       
+    fprintf(stderr, "sob R%d %ho\n", r.value, pc);
 }
 
-void do_inc()
+void do_jsr()
 {
-    fprintf(stdout, "inc \n");
+    sp -= 2;
+    word_write(sp, reg[r.value]);
+    reg[r.value] = pc;
+    pc = dd.adr;
+    fprintf(stderr, "R%d %ho", r.value, pc);
+}
+
+void do_rts()
+{
+    pc = reg[r.value];
+    reg[r.value] = word_read(sp);
+    sp += 2;
+    fprintf(stderr, "%ho", pc);
 }
 
 void do_halt()
 {    
-    fprintf(stdout, "halt \n");
     reg_dump();
     exit(0);
 }
 
 void do_nothing()
 {
-    fprintf(stdout, "unknown \n");
+    ASSERT(0 && ":(");
+}
+
+Arg get_nn(word_t word)
+{
+    Arg res = {};
+    res.value = word & 7;
+    return res;
+}
+
+Arg get_r(word_t word)
+{
+    Arg res = {};
+    res.value = word & 7;
+    return res;
+}
+
+Arg get_b(word_t word)
+{
+    Arg res = {};
+    res.value = word & 7;
+    return res;
 }
 
 Arg get_mr(word_t word)
@@ -109,46 +229,70 @@ Arg get_mr(word_t word)
     {
         // мода 0, R1
         case 0:
-            res.adr = (address)reg_number;        // адрес - номер регистра
-            res.value = reg[reg_number];          // значение - число в регистре
-            fprintf(stderr, "R%d ", reg_number);  // печать номера регистра
+            res.adr = (adress)reg_number;        // адрес - номер регистра
+            if (b.value == 1)
+                res.value = byte_read(res.adr);
+            else if (b.value == 0)
+                res.value = word_read(res.adr);    // значение - число в регистре
+            fprintf(stderr, "R%d ", reg_number);      // печать номера регистра
             break;
 
         // мода 1, (R1)
         case 1:
             res.adr = reg[reg_number];               // в регистре адрес
-            res.value = word_read(res.adr);          // по адресу - значение
+            if (b.value == 1)
+                res.value = byte_read(res.adr);  
+            else if (b.value == 0)
+                res.value = word_read(res.adr);    // по адресу - значение
+
             fprintf(stderr,"(R%d) ", reg_number);    // печать обращения к регистру по адресу 
             break;
 
         // мода 2, (R1)+ или #3
         case 2:
-            reg[reg_number] += 2;        
             res.adr = reg[reg_number];       // в регистре адрес
-            res.value = word_read(res.adr);  // по адресу - значение
-
+            if (b.value == 1)
+                res.value = byte_read(res.adr);
+            else if (b.value == 0)
+                res.value = word_read(res.adr);  // по адресу - значение
+            
             // печать разной мнемоники для PC и других регистров
             if (reg_number == 7)
-                fprintf(stderr, "#%ho ", word_read(reg[reg_number]));
+                fprintf(stderr, "#%ho ", res.value);
             else
-                fprintf(stderr, "(R%d) ", reg_number);
+                fprintf(stderr, "(R%d)+ ", reg_number);
+        
+            if (b.value == 0)
+                reg[reg_number] += 2;
+            else if ((b.value == 1) && (reg_number >= 0) && (reg_number <= 5))
+                    reg[reg_number] += 1;
+            else reg[reg_number] += 2;
+
             break;
         // мода 3
         case 3:
-            res.adr = reg[reg_number];
-            res.value = word_read(res.adr);      // добавилось еще одно разыменование
+            res.adr = word_read(reg[reg_number]);            
+            if (b.value == 1)
+                res.value = byte_read(res.adr);
+            else if (b.value == 0)
+                res.value = word_read(res.adr); // добавилось еще одно разыменование
             reg[reg_number] += 2;
             break;
-
         // мода 4
         case 4:
-            if(0 <= reg_number && reg_number <= 5)  
-                reg[reg_number] -= 1;
-            if(6 <= reg_number && reg_number <= 7)
+            if(0 <= reg_number && reg_number <= 5)
+            {   
+                if (b.value == 0)
+                    reg[reg_number] -= 2;
+                else 
+                    reg[reg_number] -= 1;
+            }
+            else if (6 <= reg_number && reg_number <= 7)
                 reg[reg_number] -= 2;
 
             res.adr = reg[reg_number];
             res.value = word_read(res.adr);
+            fprintf(stderr, " -(R%d)", reg_number);
             break;
         // мода 5
         case 5:
@@ -157,6 +301,33 @@ Arg get_mr(word_t word)
             res.adr = word_read(res.adr);
             res.value = word_read(res.adr);      
             break;
+        // мода 6
+        case 6:
+        {
+            word_t move = word_read(pc);
+            pc += 2;
+            res.adr = reg[reg_number];
+            res.adr += move;
+            if (b.value == 0)
+                res.value = word_read(res.adr);
+            else if (b.value == 1)
+                res.value = byte_read(res.adr);
+            break;
+        }
+        // мода 7
+        case 7:
+        {
+            word_t move = word_read(pc);
+            pc += 2;
+            res.adr = reg[reg_number];
+            res.adr += move;
+            res.adr = word_read(res.adr);
+            if (b.value == 0)
+                res.value = word_read(res.adr);
+            else if (b.value == 1)
+                res.value = byte_read(res.adr);
+            break;
+        }
         default:
             fprintf(stderr, "Mode %d not implemented yet!\n", mod);
             exit(1);
@@ -165,115 +336,64 @@ Arg get_mr(word_t word)
     return res;
 }
 
+char get_xx(word_t word)
+{
+    return (char)(word & 255);
+}
+
+void set_NZVC(word_t word)
+{
+    if (word == 0)
+        flag_Z = 1;
+    if (b.value == 1)
+    {
+        flag_N = (word >> 7) == 1;
+        flag_C = (word >> 8) == 1;
+    }
+    else if (b.value == 0)
+    {
+        flag_N = (word >> 15) == 1;
+        flag_C = (word >> 16) == 1;
+    }
+}
+
 void reg_dump()
 {
+    printf("\n\n");
     for (size_t reg_number = 0; reg_number < NUMBER_OF_REG; reg_number++)
     {
         printf("reg[%zu] = %.6ho \n", reg_number, reg[reg_number]);
     }
 }
 
-void test_mode1_toreg()
+void byte_write(adress adr, byte_t value)
 {
-    // setup
-    reg[3] = 12;    // dd
-    reg[5] = 0200;  // ss
-    word_write(0200, 34);
-    reg_dump();
-    Command cmd = parse_cmd(0011503);
-
-    word_t  expected_ss_value = 34;
-    address expected_ss_adr   = 0200;
-    word_t  expected_dd_value = 12;
-    address expected_dd_adr   = 3;
-    
-    cmd.do_command();
-    reg_dump();
-    fprintf(stderr, "Test mode 1: reg \n");
-    fprintf(stderr, "expected ss.value = %hx, result ss.value = %hx \n", 
-                                                expected_ss_value, ss.value);
-    fprintf(stderr, "expected ss.adr = %hx, result ss.adr = %hx \n", 
-                                                expected_ss_adr, ss.adr);
-    fprintf(stderr, "expected dd.value = %hx, result dd.value = %hx \n", 
-                                                expected_dd_value, dd.value);
-    fprintf(stderr, "expected dd.adr = %hx, result dd.adr = %hx \n", 
-                                                expected_dd_adr, dd.value);
-
-    ASSERT(expected_ss_value == ss.value);
-    ASSERT(expected_ss_adr   == ss.adr);
-    ASSERT(expected_dd_value == dd.value);
-    ASSERT(expected_dd_adr   == dd.adr);
-
-    word_t expected_reg_3 = 34;
-    word_t expected_reg_5 = 0200;
-
-    fprintf(stderr, "expected reg[3] = %hx, result reg[3] = %hx \n", 
-                                                expected_reg_3, reg[3]);
-    fprintf(stderr, "expected reg[5] = %hx, result ss.value = %hx \n", 
-                                                expected_reg_5, reg[5]);
-
-    ASSERT(expected_reg_3 == reg[3]);
-
-    // проверяем, что значение регистра не изменилось
-    ASSERT(expected_reg_5 == reg[5]);
-
-    reg[3] = 0;
-    reg[5] = 0;
-    printf("Test mode 1: reg - OK \n");
+    if (adr < 8)
+    {
+        if (value < 0)
+            reg[adr] = (word_t)(((word_t)value) | 0xFF00);
+        if (value >= 0)
+            reg[adr] = (word_t)(((word_t)value) & 0x00FF);
+    }
+    else
+    {
+        ASSERT((int)adr <= MEMORY_SIZE);
+        memory[adr] = value;
+    }
 }
 
-void test_mode0()
+byte_t byte_read(adress adr)
 {
-    fprintf(stderr, "Test mode 0: \n");
-    reg[3] = 12;    // dd
-    reg[5] = 34;    // ss
-    Command cmd = parse_cmd(0010503);
-    cmd.do_command();
-    fprintf(stderr, "%hx\n", dd.value);
-    fprintf(stderr, "%hx\n", dd.adr);
-    fprintf(stderr, "%hx\n", ss.value);
-    fprintf(stderr, "%hx\n", ss.adr);   
-    
-    ASSERT(ss.value == 34);
-    ASSERT(ss.adr == 5);
-    ASSERT(dd.value == 12);
-    ASSERT(dd.adr == 3);
-    printf(">>>>Test mode 0 - OK<<<<\n");
+    ASSERT((int)adr <= MEMORY_SIZE);    
+    if ((int)adr < 8)
+        return (byte_t)reg[adr];
 
-    reg[3] = 0;
-    reg[5] = 0;
-}
-
-void test_mov()
-{
-    fprintf(stderr, "Test mov\n");
-    reg[3] = 12;    // dd
-    reg[5] = 34;    // ss
-    Command cmd = parse_cmd(0010503);
-    cmd.do_command();
-    ASSERT(reg[3] = 34);
-    ASSERT(reg[5] = 34);
-    printf("Test mov - OK\n");
-    reg[3] = 0;
-    reg[5] = 0;
-}
-
-
-void byte_write(address adr, byte_t value)
-{
-    ASSERT((int)adr <= MEMORY_SIZE);
-    memory[adr] = value;
-}
-
-byte_t byte_read(address adr)
-{
-    ASSERT((int)adr <= MEMORY_SIZE)
     return memory[adr];
 }
 
-void word_write(address adr, word_t value)
+void word_write(adress adr, word_t value)
 {
-    ASSERT((int)adr < MEMORY_SIZE);
+    ASSERT((int)adr <= MEMORY_SIZE);
 
     if (adr < 8)
     {
@@ -289,20 +409,21 @@ void word_write(address adr, word_t value)
     memory[adr + 1] = b1;
 }
 
-word_t word_read(address adr)
+word_t word_read(adress adr)
 {
-    ASSERT((int)adr < MEMORY_SIZE);
+    ASSERT((int)adr <= MEMORY_SIZE);
     if (adr < 8)
     {
         return reg[adr];
     }
+
     ASSERT((int)adr % 2 == 0)
     word_t word = (word_t)(((word_t)(memory[adr+1])) << 8);
     word = word | memory[adr];
     return word;
 }
 
-void memory_dump(address adr, size_t dump_size)
+void memory_dump(adress adr, size_t dump_size)
 {
     ASSERT(adr % 2 == 0);
 
@@ -321,7 +442,7 @@ enum pdp_errors load_data(const int argc, const char* file_name)
     FILE* filein = fopen(file_name, "r");
     if (filein == NULL)
         return pdp_bad_file_for_open;
-    address adr;
+    adress adr;
     while (fscanf(filein, "%hx", &adr) != EOF)
     {
         word_t number_of_bytes = 0;
@@ -337,4 +458,12 @@ enum pdp_errors load_data(const int argc, const char* file_name)
     }
     
     return pdp_ok;
+}
+
+void print_NZVC()
+{
+    fprintf(stderr, "N: %d", flag_N);
+    fprintf(stderr, "Z: %d", flag_Z);
+    fprintf(stderr, "V: %d", flag_V);
+    fprintf(stderr, "C: %d", flag_C);
 }

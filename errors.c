@@ -18,6 +18,9 @@ void errors_processing(enum pdp_errors error)
         case pdp_syntax_error:
             fprintf(stderr, "Syntax error\n");
             return;
+        case programm_counter_negative:
+            fprintf(stderr, "Negative PC\n");
+            return;
         default:
             ASSERT(0 && ":(");
     }
