@@ -136,7 +136,7 @@ void do_clr()
 void do_br()
 {
     pc = (adress)(pc + 2 * xx);
-    fprintf(stderr, "br %ho", pc);
+    fprintf(stderr, "%ho", pc);
 }
 
 void do_beq()
